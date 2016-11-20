@@ -175,3 +175,5 @@ class HandshakeState(object):
 
         if len(self.message_patterns) == 0:
             return self.symmetricstate.split()
+
+

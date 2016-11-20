@@ -192,3 +192,5 @@ class NoiseBuffer(object):
             return bytes(self.bfr)
         else:
             return bytes(self.bfr[:self.length])
+
+
