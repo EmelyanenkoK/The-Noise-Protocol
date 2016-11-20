@@ -1,6 +1,6 @@
 from patterns import HSPatterns
-from noisetypes import empty
-from error import HandshakeError
+from NoiseTypes import empty
+from errors import HandshakeError
 
 
 class CipherState(object):
