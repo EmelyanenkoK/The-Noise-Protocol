@@ -16,7 +16,7 @@ class Singleton(object):
     def __new__(self, *args, **kwargs):
         """Return instance of class, creating if necessary"""
         if self._instance is None:
-            self._instance = object.__new__(self, *args, **kwargs)
+            self._instance = object.__new__(self, *args)
         return self._instance
 
 
