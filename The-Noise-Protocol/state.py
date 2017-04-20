@@ -93,7 +93,7 @@ class HandshakeState(object):
         self.rs = rs
         self.re = re
 
-        pattern = HSPatterns(handshake_pattern)
+        pattern = HSPatterns[handshake_pattern]
         if pattern.i_pre not in ('', 's', 'e', 'se'):
             raise HandshakeError("Invalid initiator pre-message")
         if pattern.r_pre not in ('', 's', 'e', 'se'):
