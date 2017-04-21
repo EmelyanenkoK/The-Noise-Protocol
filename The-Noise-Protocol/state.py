@@ -13,7 +13,7 @@ class CipherState(object):
 
     def initialize_key(self, key):
         self.k = key
-        self.n = int.from_bytes(os.urandom(8),'big')
+        self.n = 0#int.from_bytes(os.urandom(8),'big')
 
     @property
     def has_key(self):
@@ -148,7 +148,7 @@ class HandshakeState(object):
             else:
                 raise HandshakeError("Invalid pattern: " + token)
         message_buffer.append(self.symmetricstate.encrypt_and_hash(payload))
-
+        
         if len(self.message_patterns) == 0:
             return self.symmetricstate.split()
 
