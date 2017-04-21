@@ -2,6 +2,8 @@ from patterns import HSPatterns
 from NoiseTypes import empty
 from errors import HandshakeError
 
+import logging
+logger = logging.getLogger(__name__)
 
 class CipherState(object):
     def __init__(self, cipher, key=empty):
@@ -47,14 +49,19 @@ class SymmetricState(object):
             self.h = self.hasher.hash(protocol_name)
         self.ck = self.h
         self.cipherstate.initialize_key(empty)
+        logger.debug("Handshake hash init: %s"%hex(int.from_bytes(self.h, 'big')))
+        logger.debug("Chaining key init: %s"%hex(int.from_bytes(self.ck, 'big')))
 
     def mix_key(self, input_key_material):
         self.ck, temp_k = self.hasher.hkdf(self.ck, input_key_material,
                                            dh=self.dh)
         self.cipherstate.initialize_key(temp_k)
+        logger.debug("Chaining key update: %s"%hex(int.from_bytes(self.ck, 'big')))
+        
 
     def mix_hash(self, data):
         self.h = self.hasher.hash(self.h + data)
+        logger.debug("Handshake hash update: %s"%hex(int.from_bytes(self.h, 'big')))
 
     def encrypt_and_hash(self, plaintext):
         ciphertext = self.cipherstate.encrypt_with_ad(self.h, plaintext)
@@ -85,6 +92,7 @@ class HandshakeState(object):
                    s=empty, e=empty, rs=empty, re=empty):
         protocol_name = b'_'.join((handshake_pattern, self.dh.NAME,
                                    self.cipher.NAME, self.hasher.NAME))
+        logger.debug("Protocol name is composed: %s"%protocol_name)
         self.symmetricstate = SymmetricState(self.dh, self.cipher, self.hasher,
                                              protocol_name)
         self.symmetricstate.mix_hash(prologue)
@@ -102,20 +110,20 @@ class HandshakeState(object):
             if token == 's':
                 if self.s is empty:
                     raise HandshakeError("No static public key (initiator)")
-                self.symmetricstate.mix_hash(self.s.public)
+                self.symmetricstate.mix_hash(self.s.public())
             elif token == 'e':
                 if self.e is empty:
                     raise HandshakeError("No ephemeral public key (initiator)")
-                self.symmetricstate.mix_hash(self.e.public)
+                self.symmetricstate.mix_hash(self.e.public())
         for token in pattern.r_pre:
             if token == 's':
                 if self.rs is empty:
                     raise HandshakeError("No static public key (responder)")
-                self.symmetricstate.mix_hash(self.rs)
+                self.symmetricstate.mix_hash(self.rs.serialize())
             elif token == 'e':
                 if self.re is empty:
                     raise HandshakeError("No ephemeral public key (responder)")
-                self.symmetricstate.mix_hash(self.re)
+                self.symmetricstate.mix_hash(self.re.serialize())
 
         self.message_patterns = list(pattern.message_patterns)
 
@@ -124,10 +132,10 @@ class HandshakeState(object):
         for token in message_pattern:
             if token == 'e':
                 self.e = self.dh.generate_keypair()
-                message_buffer.append(self.e.public_key)
-                self.symmetricstate.mix_hash(self.e.public_key)
+                message_buffer.append(self.e.public_key())
+                self.symmetricstate.mix_hash(self.e.public_key())
             elif token == 's':
-                msg = self.symmetricstate.encrypt_and_hash(self.s.public_key)
+                msg = self.symmetricstate.encrypt_and_hash(self.s.public_key())
                 message_buffer.append(msg)
             elif token[:2] == 'dh':
                 try:
@@ -151,7 +159,7 @@ class HandshakeState(object):
                     raise HandshakeError("Message too short""")
                 self.re = message[:self.dh.DHLEN]
                 message = message[self.dh.DHLEN:]
-                self.symmetricstate.mix_hash(self.re)
+                self.symmetricstate.mix_hash(self.re.serialize())
             elif token == 's':
                 has_key = self.symmetricstate.cipherstate.has_key
                 nbytes = self.dh.DHLEN + 16 if has_key else self.dh.DHLEN
