@@ -132,7 +132,7 @@ class HandshakeState(object):
         message_pattern = self.message_patterns.pop(0)
         for token in message_pattern:
             if token == 'e':
-                self.e = self.dh.generate_keypair()
+                #self.e = self.dh.generate_keypair()
                 message_buffer.append(self.e.public_key())
                 self.symmetricstate.mix_hash(self.e.public_key())
             elif token == 's':
