@@ -5,6 +5,7 @@ from errors import HandshakeError
 import logging
 logger = logging.getLogger(__name__)
 
+import os
 class CipherState(object):
     def __init__(self, cipher, key=empty):
         self.cipher = cipher
@@ -12,7 +13,7 @@ class CipherState(object):
 
     def initialize_key(self, key):
         self.k = key
-        self.n = 0
+        self.n = int.from_bytes(os.urandom(8),'big')
 
     @property
     def has_key(self):
@@ -21,7 +22,7 @@ class CipherState(object):
     def encrypt_with_ad(self, ad, plaintext):
         if self.k is empty:
             return plaintext
-        ret = self.cipher.encrypt(self.k, self.n, ad, plaintext)
+        ret = self.cipher.encrypt(self.k, self.n.to_bytes(8,'big'), ad, plaintext)
         self.n += 1
         return ret
 
