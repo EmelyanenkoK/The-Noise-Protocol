@@ -16,27 +16,32 @@ class CipherState(object):
 
     def initialize_key(self, key):
         self.k = key
-        self.n = 0#int.from_bytes(os.urandom(8),'big')
+        self.n = 0
+
+    def drop_nonce(self):
+        self.n = 0
 
     @property
     def has_key(self):
         return self.k is not empty
 
-    def encrypt_with_ad(self, ad, plaintext):
+    def encrypt_with_ad(self, ad, plaintext, forced_nonce=None):
         if self.k is empty:
             return plaintext
-        logger.debug("encrypt_with_ad nonce %s, additional data %s, plaintext %s"%( _(self.n.to_bytes(8,'big')), _(ad), _(plaintext)))
-        ret = self.cipher.encrypt(self.k, self.n.to_bytes(8,'big'), ad, plaintext)
+        nonce= forced_nonce if forced_nonce else self.n
+        logger.debug("encrypt_with_ad nonce key %s, %s, additional data %s, plaintext %s"%( _(self.k), _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(plaintext)))
+        ret = self.cipher.encrypt(self.k, b"\x00"*4+nonce.to_bytes(8,'little'), ad, plaintext)
         logger.debug("encrypt_with_ad result %s"%_(ret))
-        self.n += 1
+        self.n += 0 if forced_nonce else 1
         return ret
 
-    def decrypt_with_ad(self, ad, ciphertext):
+    def decrypt_with_ad(self, ad, ciphertext, forced_nonce=None):
         if self.k is empty:
             return ciphertext
-        logger.debug("decrypt_with_ad: nonce %s, additional data %s, ciphertext %s"%( _(self.n.to_bytes(8,'big')), _(ad), _(ciphertext)))
-        ret = self.cipher.decrypt(self.k, self.n.to_bytes(8,'big'), ad, ciphertext)
-        self.n += 1
+        nonce= forced_nonce if forced_nonce else self.n
+        logger.debug("decrypt_with_ad: nonce %s, additional data %s, ciphertext %s"%( _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(ciphertext)))
+        ret = self.cipher.decrypt(self.k, b"\x00"*4+nonce.to_bytes(8,'little'), ad, ciphertext)
+        self.n += 0 if forced_nonce else 1
         return ret
 
 
@@ -71,15 +76,18 @@ class SymmetricState(object):
         self.h = self.hasher.hash(self.h + data)
         logger.debug("Handshake hash update: %s"%_(self.h))
 
-    def encrypt_and_hash(self, plaintext):
-        ciphertext = self.cipherstate.encrypt_with_ad(self.h, plaintext)
+    def encrypt_and_hash(self, plaintext, forced_nonce=None):
+        ciphertext = self.cipherstate.encrypt_with_ad(self.h, plaintext, forced_nonce=forced_nonce)
         self.mix_hash(ciphertext)
         return ciphertext
 
-    def decrypt_and_hash(self, ciphertext):
-        plaintext = self.cipherstate.decrypt_with_ad(self.h, ciphertext)
+    def decrypt_and_hash(self, ciphertext, forced_nonce=None):
+        plaintext = self.cipherstate.decrypt_with_ad(self.h, ciphertext, forced_nonce=forced_nonce)
         self.mix_hash(ciphertext)
         return plaintext
+
+    def drop_nonce(self):
+        self.cipherstate.drop_nonce()
 
     def split(self):
         temp_k1, temp_k2 = self.hasher.hkdf(self.ck, b'')
@@ -138,15 +146,18 @@ class HandshakeState(object):
         self.message_patterns = list(pattern.message_patterns)
 
     def write_message(self, payload, message_buffer):
+        handshake_process = bool(len(self.message_patterns))
+        if handshake_process and len(payload):
+            raise Exception("During handshake payload should be empty")
         message_buffer.append(self.version)
-        message_pattern = self.message_patterns.pop(0)
+        message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
         for token in message_pattern:
             if token == 'e':
                 #self.e = self.dh.generate_keypair()
                 message_buffer.append(self.e.public_key())
                 self.symmetricstate.mix_hash(self.e.public_key())
             elif token == 's':
-                msg = self.symmetricstate.encrypt_and_hash(self.s.public_key())
+                msg = self.symmetricstate.encrypt_and_hash(self.s.public_key(), forced_nonce=1)
                 message_buffer.append(msg)
             elif token[:2] == 'dh':
                 try:
@@ -157,16 +168,18 @@ class HandshakeState(object):
                 self.symmetricstate.mix_key(self.dh.DH(x, y))
             else:
                 raise HandshakeError("Invalid pattern: " + token)
-        message_buffer.append(self.symmetricstate.encrypt_and_hash(payload))
-        
+        message_buffer.append(self.symmetricstate.encrypt_and_hash(payload, forced_nonce= 0 if handshake_process else None))
+        if handshake_process and not len(self.message_patterns): #handshake finished
+            self.symmetricstate.drop_nonce()
         if len(self.message_patterns) == 0:
             return self.symmetricstate.split()
 
     def read_message(self, message, payload_buffer):
+        handshake_process = bool(len(self.message_patterns))
         version_byte, message = message[:1], message[1:]
         if not version_byte in self.allowed_versions:
           raise Exception("Message on transport level has unknown version byte: %s"%_(version_byte))
-        message_pattern = self.message_patterns.pop(0)
+        message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
         for token in message_pattern:
             if token == 'e':
                 # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
@@ -177,14 +190,15 @@ class HandshakeState(object):
                 self.symmetricstate.mix_hash(self.re.serialize())
             elif token == 's':
                 has_key = self.symmetricstate.cipherstate.has_key
-                nbytes = self.dh.DHLEN + 16 if has_key else self.dh.DHLEN
+                nbytes = self.dh.DHLEN + 16+1 if has_key else self.dh.DHLEN+1
                 if len(message) < nbytes:
                     raise HandshakeError("Message too short, processing token %s"%token)
                 temp, message = message[:nbytes], message[nbytes:]
+                #self.symmetricstate.drop_nonces()
                 if has_key:
-                    self.rs = self.symmetricstate.decrypt_and_hash(temp)
+                    self.rs = self.dh.PublicKey( bytes(self.symmetricstate.decrypt_and_hash(temp, forced_nonce=1)), raw=True)
                 else:
-                    self.rs = temp
+                    self.rs = self.dh.PublicKey( bytes(temp), raw=True)
             elif token[:2] == 'dh':
                 try:
                     #We read message, so back order of arguments
@@ -195,8 +209,9 @@ class HandshakeState(object):
                 self.symmetricstate.mix_key(self.dh.DH(x, y))
             else:
                 raise HandshakeError("Invalid pattern: " + token)
-        payload_buffer.append(self.symmetricstate.decrypt_and_hash(message))
-
+        payload_buffer.append(self.symmetricstate.decrypt_and_hash(message, forced_nonce= 0 if handshake_process else None))
+        if handshake_process and not len(self.message_patterns): #handshake finished
+            self.symmetricstate.drop_nonce()
         if len(self.message_patterns) == 0:
             return self.symmetricstate.split()
 
