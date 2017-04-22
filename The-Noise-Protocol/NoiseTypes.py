@@ -70,17 +70,24 @@ class Cipher(Singleton):
     def decrypt(self, k, n, ad, ciphertext):
         raise NotImplementedError
 
-
+from tlslite.utils.chacha20_poly1305 import CHACHA20_POLY1305
 class ChaChaPoly(Cipher):
     NAME = b'ChaChaPoly'
 
     @classmethod
     def encrypt(self, k, n, ad, plaintext):
-        return chachapoly_encrypt(plaintext, ad, n, k)
+        aead = CHACHA20_POLY1305(k, 'python')
+        return aead.seal(n, plaintext, ad)
+        #return chachapoly_encrypt(plaintext, ad, n, k)
 
     @classmethod
     def decrypt(self, k, n, ad, ciphertext):
-        return chachapoly_decrypt(ciphertext, ad, n, k)
+        aead = CHACHA20_POLY1305(k, 'python')
+        res = aead.open(n, ciphertext, ad)
+        if res is None:
+            raise Exception("Tag is invalid")
+        return res
+        #return chachapoly_decrypt(ciphertext, ad, n, k)
 
 
 class AESGCM(Cipher):
