@@ -29,7 +29,7 @@ class CipherState(object):
         if self.k is empty:
             return plaintext
         nonce= forced_nonce if forced_nonce else self.n
-        logger.debug("encrypt_with_ad nonce key %s, %s, additional data %s, plaintext %s"%( _(self.k), _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(plaintext)))
+        logger.debug("encrypt_with_ad key %s, nonce %s, additional data %s, plaintext %s"%( _(self.k), _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(plaintext)))
         ret = self.cipher.encrypt(self.k, b"\x00"*4+nonce.to_bytes(8,'little'), ad, plaintext)
         logger.debug("encrypt_with_ad result %s"%_(ret))
         self.n += 0 if forced_nonce else 1
@@ -39,7 +39,7 @@ class CipherState(object):
         if self.k is empty:
             return ciphertext
         nonce= forced_nonce if forced_nonce else self.n
-        logger.debug("decrypt_with_ad: nonce %s, additional data %s, ciphertext %s"%( _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(ciphertext)))
+        logger.debug("decrypt_with_ad: key %s, nonce %s, additional data %s, ciphertext %s"%( _(self.k), _(b"\x00"*4+nonce.to_bytes(8,'little')), _(ad), _(ciphertext)))
         ret = self.cipher.decrypt(self.k, b"\x00"*4+nonce.to_bytes(8,'little'), ad, ciphertext)
         self.n += 0 if forced_nonce else 1
         return ret
@@ -95,7 +95,7 @@ class SymmetricState(object):
             temp_k1, temp_k2 = temp_k1[:32], temp_k2[:32]
         c1 = CipherState(self.cipherstate.cipher, temp_k1)
         c2 = CipherState(self.cipherstate.cipher, temp_k2)
-        return c1, c2
+        return c1,c2#temp_k1, temp_k2#c1, c2
 
 
 class HandshakeState(object):
@@ -144,6 +144,9 @@ class HandshakeState(object):
                     self.symmetricstate.mix_hash(self.e.pubkey())
 
         self.message_patterns = list(pattern.message_patterns)
+        self.handshake_established=False
+        self.session_ciphers=None
+        self.session=None
 
     def write_message(self, payload, message_buffer):
         handshake_process = bool(len(self.message_patterns))
@@ -172,7 +175,9 @@ class HandshakeState(object):
         if handshake_process and not len(self.message_patterns): #handshake finished
             self.symmetricstate.drop_nonce()
         if len(self.message_patterns) == 0:
-            return self.symmetricstate.split()
+            self.session_ciphers = self.symmetricstate.split()
+            self.handshake_established = True
+            self.session=Session(self.session_ciphers[0],self.session_ciphers[1], self.symmetricstate.ck, self.hasher)
 
     def read_message(self, message, payload_buffer):
         handshake_process = bool(len(self.message_patterns))
@@ -213,6 +218,54 @@ class HandshakeState(object):
         if handshake_process and not len(self.message_patterns): #handshake finished
             self.symmetricstate.drop_nonce()
         if len(self.message_patterns) == 0:
-            return self.symmetricstate.split()
+            self.session_ciphers = self.symmetricstate.split()
+            self.handshake_established = True
+            self.session=Session(self.session_ciphers[1],self.session_ciphers[0], self.symmetricstate.ck, self.hasher)
+
+class Session:
+    def __init__(self, encoder, decoder, ck, hasher):
+        self.e=encoder
+        self.e_ck=ck
+        self.d=decoder
+        self.d_ck=ck
+        self.hasher=hasher
+
+    def encode(self, payload):
+        l=len(payload)
+        l=l.to_bytes(2,'big')
+        lc=self.e.encrypt_with_ad(b'', l)
+        #self.check_e_rotate()
+        c=self.e.encrypt_with_ad(b'', payload)
+        logger.debug("l %s, lc %s, c %s"%(str(l), _(lc), _(c)))
+        self.check_e_rotate()
+        return lc+c
+
+    def decode(self, message):
+        lc,message=message[:18], message[18:]
+        l=self.d.decrypt_with_ad(b'', lc)
+        #self.check_d_rotate()
+        l=int.from_bytes(l,'big')
+        c=message[:l+16]
+        payload = self.d.decrypt_with_ad(b'', c)
+        self.check_d_rotate()
+        return payload
 
 
+    def check_e_rotate(self):
+        if self.e.n>=1000:
+            self.rotate_e_key()
+
+    def rotate_e_key(self):
+        (self.e_ck, k), old_ck = self.hasher.hkdf(self.e_ck, self.e.k), self.e_ck
+        logger.debug("Rotate encryption key new_ck %s, new_k %s, old_ck %s, old_k %s"%(_(self.e_ck), _(k), _(old_ck), _(self.e.k)))
+        self.e.initialize_key(k)
+
+
+    def check_d_rotate(self):
+        if self.d.n>=1000:
+            self.rotate_d_key()
+
+    def rotate_d_key(self):
+        (self.d_ck, k), old_ck = self.hasher.hkdf(self.d_ck, self.d.k), self.d_ck
+        logger.debug("Rotate encryption key new_ck %s, new_k %s, old_ck %s, old_k %s"%(_(self.d_ck), _(k), _(old_ck), _(self.d.k)))
+        self.d.initialize_key(k)
