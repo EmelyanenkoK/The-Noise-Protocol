@@ -5,6 +5,9 @@ from errors import HandshakeError
 import logging
 logger = logging.getLogger(__name__)
 
+def _(x):
+    return "0x"+"".join(["%02x"%i for i in x])
+
 import os
 class CipherState(object):
     def __init__(self, cipher, key=empty):
@@ -22,7 +25,9 @@ class CipherState(object):
     def encrypt_with_ad(self, ad, plaintext):
         if self.k is empty:
             return plaintext
+        logger.debug("encrypt_with_ad nonce %s, additional data %s, plaintext %s"%( _(self.n.to_bytes(8,'big')), _(ad), _(plaintext)))
         ret = self.cipher.encrypt(self.k, self.n.to_bytes(8,'big'), ad, plaintext)
+        logger.debug("encrypt_with_ad result %s"%_(ret))
         self.n += 1
         return ret
 
@@ -50,19 +55,20 @@ class SymmetricState(object):
             self.h = self.hasher.hash(protocol_name)
         self.ck = self.h
         self.cipherstate.initialize_key(empty)
-        logger.debug("Handshake hash init: %s"%hex(int.from_bytes(self.h, 'big')))
-        logger.debug("Chaining key init: %s"%hex(int.from_bytes(self.ck, 'big')))
+        logger.debug("Handshake hash init: %s"%_(self.h))
+        logger.debug("Chaining key init: %s"%_(self.ck))
 
     def mix_key(self, input_key_material):
+        logger.debug("HKDF: %s %s"%(_(self.ck), _(input_key_material)))
         self.ck, temp_k = self.hasher.hkdf(self.ck, input_key_material,
                                            dh=self.dh)
         self.cipherstate.initialize_key(temp_k)
-        logger.debug("Chaining key update: %s"%hex(int.from_bytes(self.ck, 'big')))
+        logger.debug("Chaining key update: %s; temp_k1 %s"%(_(self.ck), _(temp_k)))
         
 
     def mix_hash(self, data):
         self.h = self.hasher.hash(self.h + data)
-        logger.debug("Handshake hash update: %s"%hex(int.from_bytes(self.h, 'big')))
+        logger.debug("Handshake hash update: %s"%_(self.h))
 
     def encrypt_and_hash(self, plaintext):
         ciphertext = self.cipherstate.encrypt_with_ad(self.h, plaintext)
