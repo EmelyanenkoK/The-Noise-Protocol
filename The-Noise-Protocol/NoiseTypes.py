@@ -86,7 +86,8 @@ class ChaChaPoly(Cipher):
 class AESGCM(Cipher):
     NAME = b'AESGCM'
 
-
+import hmac
+import hashlib
 class Hash(Singleton):
     HASHLEN = None
     BLOCKLEN = None
@@ -97,14 +98,17 @@ class Hash(Singleton):
 
     @classmethod
     def hmac_hash(self, key, data):
-        if len(key) < self.BLOCKLEN:
+        '''if len(key) < self.BLOCKLEN:
             key = key.rjust(self.BLOCKLEN, b'\x00')
         else:
-            key = self.hash(key)
+            pass
+            #key = self.hash(key)
 
         opad = bytes(0x5c ^ byte for byte in key)
         ipad = bytes(0x36 ^ byte for byte in key)
         return self.hash(opad + self.hash(ipad + data))
+	'''
+        return hmac.new( key, data, hashlib.sha256).digest()
 
     @classmethod
     def hkdf(self, chaining_key, input_key_material, dh=X25519):
