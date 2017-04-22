@@ -167,7 +167,6 @@ class HandshakeState(object):
         if not version_byte in self.allowed_versions:
           raise Exception("Message on transport level has unknown version byte: %s"%_(version_byte))
         message_pattern = self.message_patterns.pop(0)
-        print(message_pattern)
         for token in message_pattern:
             if token == 'e':
                 # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
