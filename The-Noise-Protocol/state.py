@@ -34,7 +34,8 @@ class CipherState(object):
     def decrypt_with_ad(self, ad, ciphertext):
         if self.k is empty:
             return ciphertext
-        ret = self.cipher.decrypt(self.k, self.n, ad, ciphertext)
+        logger.debug("decrypt_with_ad: nonce %s, additional data %s, ciphertext %s"%( _(self.n.to_bytes(8,'big')), _(ad), _(ciphertext)))
+        ret = self.cipher.decrypt(self.k, self.n.to_bytes(8,'big'), ad, ciphertext)
         self.n += 1
         return ret
 
@@ -94,6 +95,8 @@ class HandshakeState(object):
         self.dh = dh
         self.cipher = cipher
         self.hasher = hasher
+        self.version = b'\x00'
+        self.allowed_versions = [self.version]
 
     def initialize(self, handshake_pattern, prologue=b'',
                    s=empty, e=empty, rs=empty, re=empty):
@@ -135,6 +138,7 @@ class HandshakeState(object):
         self.message_patterns = list(pattern.message_patterns)
 
     def write_message(self, payload, message_buffer):
+        message_buffer.append(self.version)
         message_pattern = self.message_patterns.pop(0)
         for token in message_pattern:
             if token == 'e':
@@ -159,19 +163,23 @@ class HandshakeState(object):
             return self.symmetricstate.split()
 
     def read_message(self, message, payload_buffer):
+        version_byte, message = message[:1], message[1:]
+        if not version_byte in self.allowed_versions:
+          raise Exception("Message on transport level has unknown version byte: %s"%_(version_byte))
         message_pattern = self.message_patterns.pop(0)
         for token in message_pattern:
             if token == 'e':
-                if len(message) < self.dh.DHLEN:
-                    raise HandshakeError("Message too short""")
-                self.re = message[:self.dh.DHLEN]
-                message = message[self.dh.DHLEN:]
+                # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
+                if len(message) < self.dh.DHLEN+1:
+                    raise HandshakeError("Message too short, processing token %s"%token)
+                self.re = self.dh.PublicKey(message[:self.dh.DHLEN+1], raw='True')
+                message = message[self.dh.DHLEN+1:]
                 self.symmetricstate.mix_hash(self.re.serialize())
             elif token == 's':
                 has_key = self.symmetricstate.cipherstate.has_key
                 nbytes = self.dh.DHLEN + 16 if has_key else self.dh.DHLEN
                 if len(message) < nbytes:
-                    raise HandshakeError("Message too short""")
+                    raise HandshakeError("Message too short, processing token %s"%token)
                 temp, message = message[:nbytes], message[nbytes:]
                 if has_key:
                     self.rs = self.symmetricstate.decrypt_and_hash(temp)
