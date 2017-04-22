@@ -17,7 +17,7 @@ HSPatterns = {
     # Noise_*K - Known static key for responder
     b'Noise_NK': HandshakePattern(('rs',), '', 's',(('e', 'dhes'),('e', 'dhee'),)),
     b'Noise_KK': HandshakePattern(('s', 'rs'), 's', 's',(('e', 'dhes', 'dhss'),('e', 'dhes', 'dhss'),)),
-    b'Noise_XK': HandshakePattern(('s', 'rs'), '', 's',(('e', 'dhes'),('e', 'dhee'),('s', 'dhse'),)),
+    b'Noise_XK': HandshakePattern(('s', 'rs'), 's', 's',(('e', 'dhes'),('e', 'dhee'),('s', 'dhse'),)),
     'Noise_IK': HandshakePattern(('s', 'rs'), '', 's',(('e', 'dhes', 's', 'dhss'),('e', 'dhee', 'dhes'),)),
 
     # Noise_*X - Static key transmitted by responder

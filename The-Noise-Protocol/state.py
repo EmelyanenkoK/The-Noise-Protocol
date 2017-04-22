@@ -98,7 +98,7 @@ class HandshakeState(object):
         self.version = b'\x00'
         self.allowed_versions = [self.version]
 
-    def initialize(self, handshake_pattern, prologue=b'',
+    def initialize(self, handshake_pattern, prologue=b'', initiator=False,
                    s=empty, e=empty, rs=empty, re=empty):
         protocol_name = b'_'.join((handshake_pattern, self.dh.NAME,
                                    self.cipher.NAME, self.hasher.NAME))
@@ -112,28 +112,28 @@ class HandshakeState(object):
         self.re = re
 
         pattern = HSPatterns[handshake_pattern]
-        if pattern.i_pre not in ('', 's', 'e', 'se'):
-            raise HandshakeError("Invalid initiator pre-message")
-        if pattern.r_pre not in ('', 's', 'e', 'se'):
-            raise HandshakeError("Invalid responder pre-message")
-        for token in pattern.i_pre:
-            if token == 's':
-                if self.s is empty:
-                    raise HandshakeError("No static public key (initiator)")
-                self.symmetricstate.mix_hash(self.s.public())
-            elif token == 'e':
-                if self.e is empty:
-                    raise HandshakeError("No ephemeral public key (initiator)")
-                self.symmetricstate.mix_hash(self.e.public())
-        for token in pattern.r_pre:
-            if token == 's':
-                if self.rs is empty:
-                    raise HandshakeError("No static public key (responder)")
-                self.symmetricstate.mix_hash(self.rs.serialize())
-            elif token == 'e':
-                if self.re is empty:
-                    raise HandshakeError("No ephemeral public key (responder)")
-                self.symmetricstate.mix_hash(self.re.serialize())
+        if initiator:
+            if pattern.i_pre not in ('', 's', 'e', 'se'):
+                raise HandshakeError("Invalid initiator pre-message")
+            for token in pattern.i_pre:
+                if token == 's':
+                    if self.s is empty:
+                        raise HandshakeError("No static public key (initiator)")
+                    self.symmetricstate.mix_hash(self.rs.serialize())
+                elif token == 'e':
+                    if self.e is empty:
+                        raise HandshakeError("No ephemeral public key (initiator)")
+                    self.symmetricstate.mix_hash(self.re.serialize())
+        else:
+            for token in pattern.r_pre:
+                if token == 's':
+                    if self.rs is empty:
+                        raise HandshakeError("No static public key (responder)")
+                    self.symmetricstate.mix_hash(self.s.pubkey())
+                elif token == 'e':
+                    if self.re is empty:
+                        raise HandshakeError("No ephemeral public key (responder)")
+                    self.symmetricstate.mix_hash(self.e.pubkey())
 
         self.message_patterns = list(pattern.message_patterns)
 
@@ -167,6 +167,7 @@ class HandshakeState(object):
         if not version_byte in self.allowed_versions:
           raise Exception("Message on transport level has unknown version byte: %s"%_(version_byte))
         message_pattern = self.message_patterns.pop(0)
+        print(message_pattern)
         for token in message_pattern:
             if token == 'e':
                 # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
@@ -187,8 +188,9 @@ class HandshakeState(object):
                     self.rs = temp
             elif token[:2] == 'dh':
                 try:
-                    x = {'e': self.e, 's': self.s}[token[2]]
-                    y = {'e': self.re, 's': self.rs}[token[3]]
+                    #We read message, so back order of arguments
+                    x = {'e': self.e, 's': self.s}[token[3]]
+                    y = {'e': self.re, 's': self.rs}[token[2]]
                 except KeyError:
                     raise HandshakeError("Invalid pattern: " + token)
                 self.symmetricstate.mix_key(self.dh.DH(x, y))
