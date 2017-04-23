@@ -151,7 +151,7 @@ class HandshakeState(object):
     def write_message(self, payload, message_buffer):
         handshake_process = bool(len(self.message_patterns))
         if handshake_process and len(payload):
-            raise Exception("During handshake payload should be empty")
+            raise HandshakeError("During handshake payload should be empty")
         message_buffer.append(self.version)
         message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
         for token in message_pattern:
@@ -183,7 +183,7 @@ class HandshakeState(object):
         handshake_process = bool(len(self.message_patterns))
         version_byte, message = message[:1], message[1:]
         if not version_byte in self.allowed_versions:
-          raise Exception("Message on transport level has unknown version byte: %s"%_(version_byte))
+          raise HandshakeError("Message on transport level has unknown version byte: %s"%_(version_byte))
         message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
         for token in message_pattern:
             if token == 'e':

@@ -1,5 +1,5 @@
 from collections import namedtuple
-from errors import HashError
+from errors import HashError, DecryptError
 
 
 
@@ -47,7 +47,7 @@ class ChaChaPoly(Cipher):
         aead = CHACHA20_POLY1305(k, 'python')
         res = aead.open(n, ciphertext, ad)
         if res is None:
-            raise Exception("Tag is invalid")
+            raise DecryptError("Tag is invalid")
         return res
 
 
