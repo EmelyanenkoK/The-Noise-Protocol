@@ -20,3 +20,6 @@ class HashError(NoiseException):
 
 class NonceError(NoiseException):
     """Invalid nonce value"""
+
+class SessionError(NoiseException):
+    """Invalid nonce value"""

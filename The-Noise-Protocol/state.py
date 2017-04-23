@@ -99,6 +99,7 @@ class SymmetricState(object):
 
 
 class HandshakeState(object):
+
     def __init__(self, dh, cipher, hasher):
         self.dh = dh
         self.cipher = cipher
@@ -229,26 +230,37 @@ class Session:
         self.d=decoder
         self.d_ck=ck
         self.hasher=hasher
+        self.open=True
 
     def encode(self, payload):
+        if not self.open:
+            raise SessionError("Trying to encode message for closed session")
+        if len(payload)>65536:
+            raise SessionError("Trying to encode message bigger than 65536bytes (message len: %s)"%len(payload))
         l=len(payload)
         l=l.to_bytes(2,'big')
         lc=self.e.encrypt_with_ad(b'', l)
-        #self.check_e_rotate()
         c=self.e.encrypt_with_ad(b'', payload)
         logger.debug("l %s, lc %s, c %s"%(str(l), _(lc), _(c)))
         self.check_e_rotate()
         return lc+c
+            
 
     def decode(self, message):
-        lc,message=message[:18], message[18:]
-        l=self.d.decrypt_with_ad(b'', lc)
-        #self.check_d_rotate()
-        l=int.from_bytes(l,'big')
-        c=message[:l+16]
-        payload = self.d.decrypt_with_ad(b'', c)
-        self.check_d_rotate()
-        return payload
+        if not self.open:
+            raise SessionError("Trying to decode message from closed session") 
+        try:
+            lc,message=message[:18], message[18:]
+            l=self.d.decrypt_with_ad(b'', lc)
+            l=int.from_bytes(l,'big')
+            c=message[:l+16]
+            payload = self.d.decrypt_with_ad(b'', c)
+            self.check_d_rotate()
+            return payload
+        except Exception as e:
+            logger.warning('Unable to decode message, close session. %s'%e)
+            self.open=False
+            raise #Propagate
 
 
     def check_e_rotate(self):
