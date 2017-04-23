@@ -67,7 +67,7 @@ class SymmetricState(object):
     def mix_key(self, input_key_material):
         logger.debug("HKDF: %s %s"%(_(self.ck), _(input_key_material)))
         self.ck, temp_k = self.hasher.hkdf(self.ck, input_key_material,
-                                           dh=self.dh)
+                                           dhlen=self.dh.DHLEN)
         self.cipherstate.initialize_key(temp_k)
         logger.debug("Chaining key update: %s; temp_k1 %s"%(_(self.ck), _(temp_k)))
         

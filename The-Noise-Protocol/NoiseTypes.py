@@ -1,12 +1,6 @@
 from collections import namedtuple
 from errors import HashError
 
-from pysodium import crypto_aead_chacha20poly1305_encrypt as chachapoly_encrypt, crypto_aead_chacha20poly1305_decrypt as chachapoly_decrypt
-import libnacl
-from libnacl import crypto_box_keypair as x25519_keypair, crypto_box_beforenm as x25519_dh, crypto_hash_sha256 as sha256_hash, crypto_hash_sha512 as sha512_hash, crypto_generichash as blake2b_hash
-
-# Set BLAKE2b HASHLEN
-libnacl.crypto_generichash_BYTES = 64
 
 
 class Singleton(object):
@@ -27,38 +21,7 @@ class Empty(Singleton):
 empty = Empty()
 
 
-KeyPair = namedtuple('KeyPair', ('public_key', 'private_key'))
 
-
-class DH(Singleton):
-    DHLEN = None
-    NAME = b''
-
-    @classmethod
-    def generate_keypair(self):
-        raise NotImplementedError
-
-    @classmethod
-    def DH(self, keypair, public_key):
-        raise NotImplementedError
-
-
-class X25519(DH):
-    DHLEN = 32
-    NAME = b'25519'
-
-    @classmethod
-    def generate_keypair(self):
-        return KeyPair(*x25519_keypair())
-
-    @classmethod
-    def DH(self, keypair, public_key):
-        return x25519_dh(public_key, keypair.private_key)
-
-
-class X448(DH):
-    DHLEN = 56
-    NAME = b'448'
 
 
 class Cipher(Singleton):
@@ -78,7 +41,6 @@ class ChaChaPoly(Cipher):
     def encrypt(self, k, n, ad, plaintext):
         aead = CHACHA20_POLY1305(k, 'python')
         return aead.seal(n, plaintext, ad)
-        #return chachapoly_encrypt(plaintext, ad, n, k)
 
     @classmethod
     def decrypt(self, k, n, ad, ciphertext):
@@ -87,11 +49,8 @@ class ChaChaPoly(Cipher):
         if res is None:
             raise Exception("Tag is invalid")
         return res
-        #return chachapoly_decrypt(ciphertext, ad, n, k)
 
 
-class AESGCM(Cipher):
-    NAME = b'AESGCM'
 
 import hmac
 import hashlib
@@ -105,31 +64,13 @@ class Hash(Singleton):
 
     @classmethod
     def hmac_hash(self, key, data):
-        '''if len(key) < self.BLOCKLEN:
-            key = key.rjust(self.BLOCKLEN, b'\x00')
-        else:
-            pass
-            #key = self.hash(key)
-
-        opad = bytes(0x5c ^ byte for byte in key)
-        ipad = bytes(0x36 ^ byte for byte in key)
-        return self.hash(opad + self.hash(ipad + data))
-	'''
         return hmac.new( key, data, hashlib.sha256).digest()
 
     @classmethod
-    def hkdf(self, chaining_key, input_key_material, dh=X25519):
-        """
-        Hash-based key derivation function
-        dh parameter should be set to the Diffie-Hellman class
-        Takes a ``chaining_key'' byte sequence of len HASHLEN, and an
-        ``input_key_material'' byte sequence with length either zero
-        bytes, 32 bytes or DHLEN bytes.
-        Returns two byte sequences of length HASHLEN
-        """
+    def hkdf(self, chaining_key, input_key_material, dhlen=64):
         if len(chaining_key) != self.HASHLEN:
             raise HashError("Incorrect chaining key length")
-        if len(input_key_material) not in (0, 32, dh.DHLEN):
+        if len(input_key_material) not in (0, 32, dhlen):
             raise HashError("Incorrect input key material length")
         temp_key = self.hmac_hash(chaining_key, input_key_material)
         output1 = self.hmac_hash(temp_key, b'\x01')
@@ -141,27 +82,10 @@ class SHA256(Hash):
     HASHLEN = 32
     BLOCKLEN = 64
     NAME = b'SHA256'
-    hash = sha256_hash
+    def hash(x):
+        return hashlib.sha256(x).digest()
 
 
-class SHA512(Hash):
-    HASHLEN = 64
-    BLOCKLEN = 128
-    NAME = b'SHA512'
-    hash = sha512_hash
-
-
-class BLAKE2s(Hash):
-    HASHLEN = 32
-    BLOCKLEN = 64
-    NAME = b'BLAKE2s'
-
-
-class BLAKE2b(Hash):
-    HASHLEN = 64
-    BLOCKLEN = 128
-    NAME = b'BLAKE2b'
-    hash = blake2b_hash
 
 
 class NoiseBuffer(object):
