@@ -98,7 +98,14 @@ class SymmetricState(object):
         return c1,c2#temp_k1, temp_k2#c1, c2
 
 
+from enum import Enum
 class HandshakeState(object):
+    class HandshakeStateEnum(Enum):
+        NOT_STARTED = 0
+        WAITING_TO_READ = 1
+        WAITING_TO_WRITE = 2
+        ESTABLISHED = 3
+        CLOSED = 4
 
     def __init__(self, dh, cipher, hasher):
         self.dh = dh
@@ -106,6 +113,7 @@ class HandshakeState(object):
         self.hasher = hasher
         self.version = b'\x00'
         self.allowed_versions = [self.version]
+        self.state = self.HandshakeStateEnum.NOT_STARTED
 
     def initialize(self, handshake_pattern, prologue=b'', initiator=False,
                    s=empty, e=empty, rs=empty, re=empty):
@@ -148,13 +156,16 @@ class HandshakeState(object):
         self.handshake_established=False
         self.session_ciphers=None
         self.session=None
+        self.state = self.HandshakeStateEnum.WAITING_TO_WRITE if initiator else self.HandshakeStateEnum.WAITING_TO_READ
 
     def write_message(self, payload, message_buffer):
+        if not self.state == self.HandshakeStateEnum.WAITING_TO_WRITE:
+            raise HandshakeError("Unexpected handshake actions. Handshake in state %s, trying to write"%(self.state))
         handshake_process = bool(len(self.message_patterns))
         if handshake_process and len(payload):
             raise HandshakeError("During handshake payload should be empty")
         message_buffer.append(self.version)
-        message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
+        message_pattern = self.message_patterns.pop(0)
         for token in message_pattern:
             if token == 'e':
                 #self.e = self.dh.generate_keypair()
@@ -179,49 +190,61 @@ class HandshakeState(object):
             self.session_ciphers = self.symmetricstate.split()
             self.handshake_established = True
             self.session=Session(self.session_ciphers[0],self.session_ciphers[1], self.symmetricstate.ck, self.hasher)
+            self.state = self.HandshakeStateEnum.ESTABLISHED
+        else:
+            self.state = self.HandshakeStateEnum.WAITING_TO_READ
 
     def read_message(self, message, payload_buffer):
-        handshake_process = bool(len(self.message_patterns))
-        version_byte, message = message[:1], message[1:]
-        if not version_byte in self.allowed_versions:
-          raise HandshakeError("Message on transport level has unknown version byte: %s"%_(version_byte))
-        message_pattern = self.message_patterns.pop(0) if len(self.message_patterns) else []
-        for token in message_pattern:
-            if token == 'e':
-                # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
-                if len(message) < self.dh.DHLEN+1:
-                    raise HandshakeError("Message too short, processing token %s"%token)
-                self.re = self.dh.PublicKey(message[:self.dh.DHLEN+1], raw='True')
-                message = message[self.dh.DHLEN+1:]
-                self.symmetricstate.mix_hash(self.re.serialize())
-            elif token == 's':
-                has_key = self.symmetricstate.cipherstate.has_key
-                nbytes = self.dh.DHLEN + 16+1 if has_key else self.dh.DHLEN+1
-                if len(message) < nbytes:
-                    raise HandshakeError("Message too short, processing token %s"%token)
-                temp, message = message[:nbytes], message[nbytes:]
-                #self.symmetricstate.drop_nonces()
-                if has_key:
-                    self.rs = self.dh.PublicKey( bytes(self.symmetricstate.decrypt_and_hash(temp, forced_nonce=1)), raw=True)
+        if not self.state == self.HandshakeStateEnum.WAITING_TO_READ:
+            raise HandshakeError("Unexpected handshake actions. Handshake in state %s, trying to read"%(self.state))
+        try:
+            handshake_process = bool(len(self.message_patterns))
+            version_byte, message = message[:1], message[1:]
+            if not version_byte in self.allowed_versions:
+              raise HandshakeError("Message on transport level has unknown version byte: %s"%_(version_byte))
+            message_pattern = self.message_patterns.pop(0) 
+            for token in message_pattern:
+                if token == 'e':
+                    # Here and follows self.dh.DHLEN+1 because x-coordinate is 32-bytes long (DHLEN), plus one byte is \x02 or \x03 depends on y-coordinate
+                    if len(message) < self.dh.DHLEN+1:
+                        raise HandshakeError("Message too short, processing token %s"%token)
+                    self.re = self.dh.PublicKey(message[:self.dh.DHLEN+1], raw='True')
+                    message = message[self.dh.DHLEN+1:]
+                    self.symmetricstate.mix_hash(self.re.serialize())
+                elif token == 's':
+                    has_key = self.symmetricstate.cipherstate.has_key
+                    nbytes = self.dh.DHLEN + 16+1 if has_key else self.dh.DHLEN+1
+                    if len(message) < nbytes:
+                        raise HandshakeError("Message too short, processing token %s"%token)
+                    temp, message = message[:nbytes], message[nbytes:]
+                    #self.symmetricstate.drop_nonces()
+                    if has_key:
+                        self.rs = self.dh.PublicKey( bytes(self.symmetricstate.decrypt_and_hash(temp, forced_nonce=1)), raw=True)
+                    else:
+                        self.rs = self.dh.PublicKey( bytes(temp), raw=True)
+                elif token[:2] == 'dh':
+                    try:
+                        #We read message, so back order of arguments
+                        x = {'e': self.e, 's': self.s}[token[3]]
+                        y = {'e': self.re, 's': self.rs}[token[2]]
+                    except KeyError:
+                        raise HandshakeError("Invalid pattern: " + token)
+                    self.symmetricstate.mix_key(self.dh.DH(x, y))
                 else:
-                    self.rs = self.dh.PublicKey( bytes(temp), raw=True)
-            elif token[:2] == 'dh':
-                try:
-                    #We read message, so back order of arguments
-                    x = {'e': self.e, 's': self.s}[token[3]]
-                    y = {'e': self.re, 's': self.rs}[token[2]]
-                except KeyError:
                     raise HandshakeError("Invalid pattern: " + token)
-                self.symmetricstate.mix_key(self.dh.DH(x, y))
+            payload_buffer.append(self.symmetricstate.decrypt_and_hash(message, forced_nonce= 0 if handshake_process else None))
+            if handshake_process and not len(self.message_patterns): #handshake finished
+                self.symmetricstate.drop_nonce()
+            if len(self.message_patterns) == 0:
+                self.session_ciphers = self.symmetricstate.split()
+                self.handshake_established = True
+                self.session=Session(self.session_ciphers[1],self.session_ciphers[0], self.symmetricstate.ck, self.hasher)
+                self.state = self.HandshakeStateEnum.ESTABLISHED
             else:
-                raise HandshakeError("Invalid pattern: " + token)
-        payload_buffer.append(self.symmetricstate.decrypt_and_hash(message, forced_nonce= 0 if handshake_process else None))
-        if handshake_process and not len(self.message_patterns): #handshake finished
-            self.symmetricstate.drop_nonce()
-        if len(self.message_patterns) == 0:
-            self.session_ciphers = self.symmetricstate.split()
-            self.handshake_established = True
-            self.session=Session(self.session_ciphers[1],self.session_ciphers[0], self.symmetricstate.ck, self.hasher)
+                self.state = self.HandshakeStateEnum.WAITING_TO_WRITE
+        except: #Counterparty sended something bad. Close session and propagate exception
+            self.state = self.HandshakeStateEnum.CLOSED
+            raise
 
 class Session:
     def __init__(self, encoder, decoder, ck, hasher):
