@@ -55,8 +55,8 @@ class DiffieHellmanSecp256k1:
     @staticmethod
     def DH(key_pair, public_key):
         dh=Key(key_pair).ecdh(public_key)
-        aft_sha=SHA256.hash(dh)
-        logger.debug("DH result before %s and after sha256 %s"%(hex(int.from_bytes(dh, 'big')), hex(int.from_bytes(aft_sha, 'big'))))
+        #aft_sha=SHA256.hash(dh)
+        logger.debug("DH result %s"%(hex(int.from_bytes(dh, 'big')), ))
         return dh # TODO does secp256k1 already make sha256?
 
     
