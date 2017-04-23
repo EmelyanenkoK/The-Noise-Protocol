@@ -2,9 +2,7 @@
 This repository is the implementation of Transport level of Lightning Networks, [BOLT-08](https://github.com/lightningnetwork/lightning-rfc/blob/master/08-transport.md)
 
 # TODO
-1. Add examples
-2. Raise informative exceptions
-3. Handle session breaks
+1. Add examples (`test.py` contatins dome, need moar )
 
 # Installation
 `apk add tlslite-ng` 
