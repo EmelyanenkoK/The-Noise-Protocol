@@ -1,6 +1,6 @@
-from patterns import HSPatterns
-from NoiseTypes import empty
-from errors import HandshakeError
+from .patterns import HSPatterns
+from .NoiseTypes import empty
+from .errors import HandshakeError
 
 import logging
 logger = logging.getLogger(__name__)

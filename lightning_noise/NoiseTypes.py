@@ -1,5 +1,5 @@
 from collections import namedtuple
-from errors import HashError, DecryptError
+from .errors import HashError, DecryptError
 
 
 

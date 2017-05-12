@@ -1,5 +1,5 @@
 from secp256k1 import PrivateKey, PublicKey
-from NoiseTypes import SHA256
+from .NoiseTypes import SHA256
 import logging
 logger=logging.getLogger(__name__)
 
