@@ -1,10 +1,9 @@
 
-#from cipher_chachapoly import CipherChaChaPoly
-from NoiseTypes import SHA256, ChaChaPoly
-from dh_secp256k1 import DiffieHellmanSecp256k1, Key
-from state import HandshakeState
+from wrapper import Key, HandshakeState
 from secp256k1 import PrivateKey, PublicKey
 import os 
+
+
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -14,10 +13,7 @@ def _(x):
   return "0x"+"".join(["%02x"%i for i in x])
 
 def successfull_handshake():
-    HS_initiator=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
-    dh=DiffieHellmanSecp256k1()
-    #s,e = [dh.generate_keypair() for i in range(2)]
-    #rs,re = [dh.generate_keypair().pubkey() for i in range(2)]
+    HS_initiator=HandshakeState()
     rspriv=0x2121212121212121212121212121212121212121212121212121212121212121
     rspub=0x028d7500dd4c12685d1f568b4c2b5048e8534b873319f3a8daa612b469132ec7f7
     lspriv=0x1111111111111111111111111111111111111111111111111111111111111111
@@ -45,7 +41,7 @@ def successfull_handshake():
     assert(len(message)==50)
 
     # Receiver read first message
-    HS_receiver=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
+    HS_receiver=HandshakeState()
     repriv=0x2222222222222222222222222222222222222222222222222222222222222222
     re=Key(key=PrivateKey(repriv.to_bytes(32,'big'), raw=True))
     rs=Key(key=PrivateKey(rspriv.to_bytes(32,'big'), raw=True))
@@ -89,10 +85,7 @@ def successfull_handshake():
 
 
 def failed_handshaked():
-    HS_initiator=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
-    dh=DiffieHellmanSecp256k1()
-    #s,e = [dh.generate_keypair() for i in range(2)]
-    #rs,re = [dh.generate_keypair().pubkey() for i in range(2)]
+    HS_initiator=HandshakeState()
     rspriv=0x2121212121212121212121212121212121212121212121212121212121212121
     rspub=0x028d7500dd4c12685d1f568b4c2b5048e8534b873319f3a8daa612b469132ec7f7
     lspriv=0x1111111111111111111111111111111111111111111111111111111111111111
@@ -119,7 +112,7 @@ def failed_handshaked():
     assert(len(message)==50)
 
     # Receiver read first message
-    HS_receiver=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
+    HS_receiver=HandshakeState()
     repriv=0x2222222222222222222222222222222222222222222222222222222222222222
     re=Key(key=PrivateKey(repriv.to_bytes(32,'big'), raw=True))
     rs=Key(key=PrivateKey(rspriv.to_bytes(32,'big'), raw=True))
@@ -145,10 +138,7 @@ def failed_handshaked():
 
 
 def messages_sending():
-    HS_initiator=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
-    dh=DiffieHellmanSecp256k1()
-    #s,e = [dh.generate_keypair() for i in range(2)]
-    #rs,re = [dh.generate_keypair().pubkey() for i in range(2)]
+    HS_initiator=HandshakeState()
     rspriv=0x2121212121212121212121212121212121212121212121212121212121212121
     rspub=0x028d7500dd4c12685d1f568b4c2b5048e8534b873319f3a8daa612b469132ec7f7
     lspriv=0x1111111111111111111111111111111111111111111111111111111111111111
@@ -170,7 +160,7 @@ def messages_sending():
     assert(len(message)==50)
 
     # Receiver read first message
-    HS_receiver=HandshakeState(DiffieHellmanSecp256k1(), ChaChaPoly, SHA256)
+    HS_receiver=HandshakeState()
     repriv=0x2222222222222222222222222222222222222222222222222222222222222222
     re=Key(key=PrivateKey(repriv.to_bytes(32,'big'), raw=True))
     rs=Key(key=PrivateKey(rspriv.to_bytes(32,'big'), raw=True))
