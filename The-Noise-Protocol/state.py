@@ -158,7 +158,8 @@ class HandshakeState(object):
         self.session=None
         self.state = self.HandshakeStateEnum.WAITING_TO_WRITE if initiator else self.HandshakeStateEnum.WAITING_TO_READ
 
-    def write_message(self, payload, message_buffer):
+    def write_message(self, payload):
+        message_buffer = []
         if not self.state == self.HandshakeStateEnum.WAITING_TO_WRITE:
             raise HandshakeError("Unexpected handshake actions. Handshake in state %s, trying to write"%(self.state))
         handshake_process = bool(len(self.message_patterns))
@@ -193,6 +194,7 @@ class HandshakeState(object):
             self.state = self.HandshakeStateEnum.ESTABLISHED
         else:
             self.state = self.HandshakeStateEnum.WAITING_TO_READ
+        return b"".join(message_buffer)
 
     def read_message(self, message, payload_buffer):
         if not self.state == self.HandshakeStateEnum.WAITING_TO_READ:

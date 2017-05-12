@@ -36,11 +36,9 @@ def successfull_handshake():
     logger.debug("e.pub: %s"%_(e.pubkey()))
 
     # Initiator send first message
-    HS_initiator.initialize(b'Noise_XK', prologue=b'lightning', s=s, e=e, rs=rs, re=re, initiator=True)
-    mb=[]
-    HS_initiator.write_message(b"",mb)
+    HS_initiator.initialize(b'Noise_XK', prologue=b'lightning', s=s, e=e, rs=rs, re=None, initiator=True)
+    message = HS_initiator.write_message(b"")
     #print(mb)
-    message = b''.join(mb)
     logger.info("Act one, initiator's message composed %s"%_(message))
     msg="0x00036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f70df6086551151f58b8afe6c195782c6a"
     assert(msg==_(message))
@@ -54,15 +52,13 @@ def successfull_handshake():
     ls_pub=PublicKey(s.pubkey(), raw=True)
     assert(int.from_bytes(re.pubkey(),'big')==0x02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27)
     ls=PublicKey(s.pubkey(), raw=True)
-    HS_receiver.initialize(b'Noise_XK', prologue=b'lightning', s=rs, e=re, rs=ls_pub, re=None, initiator=False)
+    HS_receiver.initialize(b'Noise_XK', prologue=b'lightning', s=rs, e=re, rs=None, re=None, initiator=False)
     payload=[]
     HS_receiver.read_message(message, payload)
     assert(int.from_bytes(HS_receiver.symmetricstate.h,'big')==0x9d1ffbb639e7e20021d9259491dc7b160aab270fb1339ef135053f6f2cebe9ce)
 
     # Receivier sends message
-    mb=[]
-    HS_receiver.write_message(b"",mb)
-    message = b''.join(mb)
+    message = HS_receiver.write_message(b"")
     logger.info("Act two, receiver's message composed %s"%_(message))
     msg="0x0002466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276e2470b93aac583c9ef6eafca3f730ae"
     assert(msg==_(message))
@@ -74,9 +70,7 @@ def successfull_handshake():
     assert(int.from_bytes(HS_initiator.symmetricstate.h,'big')==0x90578e247e98674e661013da3c5c1ca6a8c8f48c90b485c0dfa1494e23d56d72)
 
     #Initiator sends message
-    mb=[]
-    HS_initiator.write_message(b"",mb)
-    message = b''.join(mb)
+    message = HS_initiator.write_message(b"")
     logger.info("Act three, initiator's second message composed %s"%_(message))
     msg="0x00b9e3a702e93e3a9948c2ed6e5fd7590a6e1c3a0344cfc9d5b57357049aa22355361aa02e55a8fc28fef5bd6d71ad0c38228dc68b1c466263b47fdf31e560e139ba"
     assert(msg==_(message))
@@ -118,10 +112,7 @@ def failed_handshaked():
 
     # Initiator send first message
     HS_initiator.initialize(b'Noise_XK', prologue=b'lightning', s=s, e=e, rs=rs, re=re, initiator=True)
-    mb=[]
-    HS_initiator.write_message(b"",mb)
-    #print(mb)
-    message = b''.join(mb)
+    message = HS_initiator.write_message(b"")
     logger.info("Act one, initiator's message composed %s"%_(message))
     msg="0x00036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f70df6086551151f58b8afe6c195782c6a"
     assert(msg==_(message))
@@ -141,9 +132,7 @@ def failed_handshaked():
     assert(int.from_bytes(HS_receiver.symmetricstate.h,'big')==0x9d1ffbb639e7e20021d9259491dc7b160aab270fb1339ef135053f6f2cebe9ce)
 
     # Receivier sends message
-    mb=[]
-    HS_receiver.write_message(b"",mb)
-    message = b''.join(mb)
+    message = HS_receiver.write_message(b"")
     logger.info("Act two, receiver's message composed %s"%_(message))
     msg="0x0002466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276e2470b93aac583c9ef6eafca3f730ae"
     assert(msg==_(message))
@@ -174,10 +163,8 @@ def messages_sending():
 
     # Initiator send first message
     HS_initiator.initialize(b'Noise_XK', prologue=b'lightning', s=s, e=e, rs=rs, re=re, initiator=True)
-    mb=[]
-    HS_initiator.write_message(b"",mb)
+    message = HS_initiator.write_message(b"")
     #print(mb)
-    message = b''.join(mb)
     msg="0x00036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f70df6086551151f58b8afe6c195782c6a"
     assert(msg==_(message))
     assert(len(message)==50)
@@ -196,9 +183,7 @@ def messages_sending():
     assert(int.from_bytes(HS_receiver.symmetricstate.h,'big')==0x9d1ffbb639e7e20021d9259491dc7b160aab270fb1339ef135053f6f2cebe9ce)
 
     # Receivier sends message
-    mb=[]
-    HS_receiver.write_message(b"",mb)
-    message = b''.join(mb)
+    message = HS_receiver.write_message(b"")
     msg="0x0002466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276e2470b93aac583c9ef6eafca3f730ae"
     assert(msg==_(message))
     assert(len(message)==50)
@@ -209,9 +194,7 @@ def messages_sending():
     assert(int.from_bytes(HS_initiator.symmetricstate.h,'big')==0x90578e247e98674e661013da3c5c1ca6a8c8f48c90b485c0dfa1494e23d56d72)
 
     #Initiator sends message
-    mb=[]
-    HS_initiator.write_message(b"",mb)
-    message = b''.join(mb)
+    message = HS_initiator.write_message(b"")
     msg="0x00b9e3a702e93e3a9948c2ed6e5fd7590a6e1c3a0344cfc9d5b57357049aa22355361aa02e55a8fc28fef5bd6d71ad0c38228dc68b1c466263b47fdf31e560e139ba"
     assert(msg==_(message))
     assert(len(message)==66)
@@ -258,6 +241,7 @@ def exception_if_no_exception(func):
     except:
         return True
 
-#successfull_handshake()
-#exception_if_no_exception(failed_handshaked)
+successfull_handshake()
+exception_if_no_exception(failed_handshaked)
 messages_sending()
+#failed_handshaked()
